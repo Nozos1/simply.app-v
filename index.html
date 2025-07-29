@@ -52,19 +52,14 @@
       renderDayList();
     });
 
-    let scanner;
-
     function startScanner() {
-      if (!scanner) {
-        scanner = new Html5Qrcode("preview");
-      } else {
-        scanner.clear().catch(() => {});
-      }
+      // always create a new scanner instance to avoid restart issues
+      const scanner = new Html5Qrcode("preview");
 
       const config = {
         fps: 10,
         qrbox: 250,
-        facingMode: { exact: "environment" }
+        facingMode: "environment"
       };
 
       scanner.start({ facingMode: "environment" }, config, qrCodeMessage => {
@@ -199,54 +194,53 @@
 
       container.appendChild(ul);
 
-      // Wyświetl łączną sumę
       document.getElementById("totalSum").textContent = "Łączna suma ilości: " + totalSum;
     }
 
     function showDay(date) {
-  const archive = JSON.parse(localStorage.getItem("simply_archive")) || {};
-  let rows = archive[date];
-  if (!rows) return;
+      const archive = JSON.parse(localStorage.getItem("simply_archive")) || {};
+      let rows = archive[date];
+      if (!rows) return;
 
-  let tableHTML = `
-    <h3>Dane z dnia ${date}</h3>
-    <table style="width:100%; border-collapse: collapse;">
-      <thead><tr><th>Kod QR</th><th>ID</th><th>Ilość</th><th>GPS</th><th>Czas</th><th>Usuń</th></tr></thead>
-      <tbody>
-  `;
+      let tableHTML = `
+        <h3>Dane z dnia ${date}</h3>
+        <table style="width:100%; border-collapse: collapse;">
+          <thead><tr><th>Kod QR</th><th>ID</th><th>Ilość</th><th>GPS</th><th>Czas</th><th>Usuń</th></tr></thead>
+          <tbody>
+      `;
 
-  rows.forEach((row, i) => {
-    tableHTML += `
-      <tr>
-        <td>${row.qr}</td>
-        <td>${row.id}</td>
-        <td>${row.qty}</td>
-        <td>${row.gps}</td>
-        <td>${row.time}</td>
-        <td><button onclick="deleteFromDay('${date}', ${i})">🗑️</button></td>
-      </tr>
-    `;
-  });
+      rows.forEach((row, i) => {
+        tableHTML += `
+          <tr>
+            <td>${row.qr}</td>
+            <td>${row.id}</td>
+            <td>${row.qty}</td>
+            <td>${row.gps}</td>
+            <td>${row.time}</td>
+            <td><button onclick="deleteFromDay('${date}', ${i})">🗑️</button></td>
+          </tr>
+        `;
+      });
 
-  tableHTML += "</tbody></table>";
-  document.getElementById("dayList").innerHTML = tableHTML + '<button onclick="renderDayList()">⬅️ Wróć do listy dni</button>';
-}
+      tableHTML += "</tbody></table>";
+      document.getElementById("dayList").innerHTML = tableHTML + '<button onclick="renderDayList()">⬅️ Wróć do listy dni</button>';
+    }
 
-function deleteFromDay(date, index) {
-  let archive = JSON.parse(localStorage.getItem("simply_archive")) || {};
-  if (!archive[date]) return;
+    function deleteFromDay(date, index) {
+      let archive = JSON.parse(localStorage.getItem("simply_archive")) || {};
+      if (!archive[date]) return;
 
-  archive[date].splice(index, 1);
+      archive[date].splice(index, 1);
 
-  if (archive[date].length === 0) {
-    delete archive[date];
-    renderDayList();
-  } else {
-    showDay(date);
-  }
+      if (archive[date].length === 0) {
+        delete archive[date];
+        renderDayList();
+      } else {
+        showDay(date);
+      }
 
-  localStorage.setItem("simply_archive", JSON.stringify(archive));
-}
+      localStorage.setItem("simply_archive", JSON.stringify(archive));
+    }
   </script>
 </body>
 </html>
