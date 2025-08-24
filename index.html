@@ -14,12 +14,21 @@
     #dayList ul { list-style: none; padding-left: 0; }
     #dayList li { padding: 0.3rem; border-bottom: 1px solid #333; cursor: pointer; }
     #dayList li:hover { background: #222; }
+    #qr-scanner { position: relative; width: 100%; max-width: 400px; margin: 0 auto; }
+    #qr-scanner video { width: 100%; border: 2px solid #4CAF50; border-radius: 8px; }
+    #qr-scanner .scan-region { border: 2px solid #4CAF50 !important; }
+    #qr-scanner .scan-line { background: #4CAF50 !important; }
+    #close-scanner { margin-top: 10px; padding: 8px 16px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; }
   </style>
 </head>
 <body>
   <h1>Simply App</h1>
-  <div id="preview" style="width:300px;height:200px;margin:0 auto;"></div><br>
-  <button onclick="startScanner()">Skanuj kod QR</button><br>
+  
+  <div id="qr-scanner" style="display: none;">
+    <div id="preview"></div>
+    <button id="close-scanner">Zamknij skaner</button>
+  </div>
+  
   <input type="text" id="qrResult" placeholder="Kod QR" readonly><br>
   <input type="text" id="idInput" placeholder="Wpisz ID"><br>
   <input type="number" id="qtyInput" placeholder="Ilość"><br>
@@ -37,21 +46,24 @@
 
   <div id="dayList" style="margin-top: 2rem; text-align: left;"></div>
   
+  <button onclick="resetLampInventory()" style="margin-top:1rem;">🔄 Resetuj stan lamp</button>
 
-<button onclick="resetLampInventory()" style="margin-top:1rem;">🔄 Resetuj stan lamp</button>
+  <div id="lampInventory" style="margin-top:2rem; text-align:left; display:none;"></div>
+  <button onclick="toggleLampInventory()" style="margin-top:1rem;">📉 Stan lamp</button>
 
-<div id="lampInventory" style="margin-top:2rem; text-align:left; display:none;"></div>
-<button onclick="toggleLampInventory()" style="margin-top:1rem;">📉 Stan lamp</button>
-
-<div id="lampReport" style="margin-top:2rem; text-align:left; display:none;"></div>
-<button onclick="showLampReport()" style="margin-top:1rem;">📊 Raport montażu</button>
-<div id="totalSum" style="margin-top: 1rem; font-weight: bold;"></div>
+  <div id="lampReport" style="margin-top:2rem; text-align:left; display:none;"></div>
+  <button onclick="showLampReport()" style="margin-top:1rem;">📊 Raport montażu</button>
+  <div id="totalSum" style="margin-top: 1rem; font-weight: bold;"></div>
+  
   <button onclick="clearArchive()" style="margin-top:2rem;">🗑️ Usuń wszystkie dni</button>
-<button onclick="toggleLampSummary()" style="margin-top:1rem;">💡 Lampy</button>
+  <button onclick="toggleLampSummary()" style="margin-top:1rem;">💡 Lampy</button>
 
-  <script src="https://unpkg.com/html5-qrcode"></script>
+  <!-- Użyj najnowszej wersji biblioteki -->
+  <script src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js"></script>
+  
   <script>
     let data = JSON.parse(localStorage.getItem("simply_data")) || [];
+    let html5QrCode = null;
 
     window.addEventListener("DOMContentLoaded", () => {
       const table = document.querySelector("#dataTable tbody");
@@ -60,19 +72,63 @@
         tr.innerHTML = rowHTML(row, i);
         table.appendChild(tr);
       });
-      updateSummary(); decrementLampInventory(power);
+      updateSummary();
       renderDayList();
+      
+      // Inicjalizacja skanera (ale nie uruchamiaj go od razu)
+      html5QrCode = new Html5Qrcode("preview");
+      
+      // Obsługa przycisku zamykania skanera
+      document.getElementById("close-scanner").addEventListener("click", () => {
+        stopScanner();
+      });
     });
 
+    // Poprawiona funkcja startScanner
     function startScanner() {
-      const scanner = new Html5Qrcode("preview");
-      const config = { fps: 10, qrbox: 250, facingMode: "environment" };
-      scanner.start({ facingMode: "environment" }, config, qrCodeMessage => {
-        document.getElementById("qrResult").value = qrCodeMessage;
-        scanner.stop().then(() => {
-          document.getElementById("preview").innerHTML = "";
+      const scannerDiv = document.getElementById("qr-scanner");
+      scannerDiv.style.display = "block";
+      
+      Html5Qrcode.getCameras().then(devices => {
+        if (devices && devices.length) {
+          const cameraId = devices[0].id; // Użyj pierwszej dostępnej kamery
+          
+          html5QrCode.start(
+            cameraId,
+            {
+              fps: 10,
+              qrbox: { width: 250, height: 250 },
+              facingMode: "environment"
+            },
+            qrCodeMessage => {
+              // Kod QR zeskanowany pomyślnie
+              document.getElementById("qrResult").value = qrCodeMessage;
+              stopScanner();
+            },
+            errorMessage => {
+              // Pomijamy komunikaty o błędach, chyba że jest to krytyczny błąd
+            }
+          ).catch(err => {
+            console.error("Błąd uruchamiania skanera:", err);
+            alert("Nie można uruchomić kamery: " + err);
+          });
+        }
+      }).catch(err => {
+        console.error("Błąd pobierania listy kamer:", err);
+        alert("Nie można uzyskać dostępu do kamery: " + err);
+      });
+    }
+
+    // Funkcja do zatrzymywania skanera
+    function stopScanner() {
+      if (html5QrCode && html5QrCode.isScanning) {
+        html5QrCode.stop().then(() => {
+          console.log("Skaner QR zatrzymany");
+          document.getElementById("qr-scanner").style.display = "none";
+        }).catch(err => {
+          console.error("Błąd zatrzymywania skanera:", err);
         });
-      }).catch(err => alert("Błąd uruchamiania kamery: " + err));
+      }
     }
 
     function saveEntry() {
@@ -80,6 +136,7 @@
       const id = document.getElementById("idInput").value;
       const qty = parseInt(document.getElementById("qtyInput").value) || 0;
       const power = parseInt(document.getElementById("powerInput").value) || 0;
+      
       if (!qr) return alert("Najpierw zeskanuj kod QR.");
       if (!navigator.geolocation) return alert("Twoja przeglądarka nie obsługuje geolokalizacji.");
 
@@ -92,8 +149,16 @@
         const tr = document.createElement("tr");
         tr.innerHTML = rowHTML(row, data.length - 1);
         document.querySelector("#dataTable tbody").appendChild(tr);
-        updateSummary(); decrementLampInventory(power);
-      }, err => alert("Nie udało się pobrać lokalizacji: " + err.message), { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+        updateSummary();
+        decrementLampInventory(power);
+        
+        // Wyczyść pole kodu QR po zapisaniu
+        document.getElementById("qrResult").value = "";
+      }, err => alert("Nie udało się pobrać lokalizacji: " + err.message), { 
+        enableHighAccuracy: true, 
+        timeout: 10000, 
+        maximumAge: 0 
+      });
     }
 
     function rowHTML(row, index) {
@@ -121,18 +186,15 @@
     function exportCSV() {
       let csv = "Kod QR,ID,Ilość,Moc (W),GPS,Czas\n";
       data.forEach(row => {
-        csv += `${row.qr},${row.id},${row.qty},${row.power ?? \"\"},${row.gps},${row.time}\n`;
-
+        csv += `${row.qr},${row.id},${row.qty},${row.power ?? ""},${row.gps},${row.time}\n`;
+      });
+      
       let inventory = JSON.parse(localStorage.getItem("lamp_inventory")) || {};
-      csv += "
-Pozostały stan lamp:
-Moc (W),Pozostało
-";
+      csv += "\nPozostały stan lamp:\nMoc (W),Pozostało\n";
       Object.keys(inventory).sort((a, b) => a - b).forEach(key => {
-        csv += `${key},${inventory[key]}
-`;
+        csv += `${key},${inventory[key]}\n`;
       });
-      });
+      
       const blob = new Blob([csv], { type: "text/csv" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
@@ -141,23 +203,35 @@ Moc (W),Pozostało
     }
 
     function clearData() {
-      localStorage.removeItem("simply_data");
-      data = [];
-      document.querySelector("#dataTable tbody").innerHTML = "";
-      updateSummary(); decrementLampInventory(power);
+      if (confirm("Czy na pewno chcesz wyczyścić wszystkie dane?")) {
+        localStorage.removeItem("simply_data");
+        data = [];
+        document.querySelector("#dataTable tbody").innerHTML = "";
+        updateSummary();
+      }
     }
 
     function deleteEntry(index) {
-      data.splice(index, 1);
-      localStorage.setItem("simply_data", JSON.stringify(data));
-      const table = document.querySelector("#dataTable tbody");
-      table.innerHTML = "";
-      data.forEach((row, i) => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = rowHTML(row, i);
-        table.appendChild(tr);
-      });
-      updateSummary(); decrementLampInventory(power);
+      if (confirm("Czy na pewno chcesz usunąć ten wpis?")) {
+        const power = data[index].power;
+        data.splice(index, 1);
+        localStorage.setItem("simply_data", JSON.stringify(data));
+        const table = document.querySelector("#dataTable tbody");
+        table.innerHTML = "";
+        data.forEach((row, i) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = rowHTML(row, i);
+          table.appendChild(tr);
+        });
+        updateSummary();
+        
+        // Przywróć liczbę lamp w inwentarzu
+        if (power && lampInventory.hasOwnProperty(power)) {
+          lampInventory[power] += 1;
+          localStorage.setItem("lamp_inventory", JSON.stringify(lampInventory));
+          updateLampInventoryDisplay();
+        }
+      }
     }
 
     function endDay() {
@@ -223,131 +297,9 @@ Moc (W),Pozostało
         document.getElementById("totalSum").textContent = "";
       }
     }
-  </script>
 
-<div id="lampSummary" style="margin-top:3rem; text-align:left; display:none;" style="margin-top:3rem; text-align:left;">
-  <h3>Planowane lampy do montażu:</h3>
-  <table style="border-collapse: collapse; width: 100%; max-width: 400px;">
-    <thead><tr><th style='border:1px solid #333; padding:5px;'>Model</th><th style='border:1px solid #333; padding:5px;'>Moc (W)</th><th style='border:1px solid #333; padding:5px;'>Ilość</th></tr></thead>
-    <tbody>
-      <tr><td style='border:1px solid #333; padding:5px;'>SAWA</td><td style='border:1px solid #333; padding:5px;'>29</td><td style='border:1px solid #333; padding:5px;'>40</td></tr>
-      <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>46</td><td style='border:1px solid #333; padding:5px;'>167</td></tr>
-      <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>25</td><td style='border:1px solid #333; padding:5px;'>161</td></tr>
-      <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>36</td><td style='border:1px solid #333; padding:5px;'>20</td></tr>
-      <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>38</td><td style='border:1px solid #333; padding:5px;'>16</td></tr>
-      <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>40</td><td style='border:1px solid #333; padding:5px;'>153</td></tr>
-      <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>54</td><td style='border:1px solid #333; padding:5px;'>111</td></tr>
-      <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>30</td><td style='border:1px solid #333; padding:5px;'>9</td></tr>
-      <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>50</td><td style='border:1px solid #333; padding:5px;'>4</td></tr>
-    </tbody>
-  </table>
-</div>
-
-
-<script>
-  function toggleLampSummary() {
-    const section = document.getElementById("lampSummary");
-    if (section.style.display === "none") {
-      section.style.display = "block";
-    } else {
-      section.style.display = "none";
-    }
-  }
-</script>
-
-<script>
-  const lampInventory = {
-    29: 40,
-    46: 167,
-    25: 161,
-    36: 20,
-    38: 16,
-    40: 153,
-    54: 111,
-    30: 9,
-    50: 4
-  };
-
-  function updateLampInventoryDisplay() {
-    let html = "<h3>Pozostałe lampy do montażu:</h3><table style='border-collapse: collapse; width:100%; max-width:400px;'>";
-    html += "<thead><tr><th style='border:1px solid #333; padding:5px;'>Moc (W)</th><th style='border:1px solid #333; padding:5px;'>Pozostało</th></tr></thead><tbody>";
-    const keys = Object.keys(lampInventory).sort((a,b) => a-b);
-    for (let moc of keys) {
-      html += `<tr><td style='border:1px solid #333; padding:5px;'>${moc}</td><td style='border:1px solid #333; padding:5px;'>${lampInventory[moc]}</td></tr>`;
-    }
-    html += "</tbody></table>";
-    document.getElementById("lampInventory").innerHTML = html;
-  }
-
-  function decrementLampInventory(power) {
-    if (lampInventory.hasOwnProperty(power)) {
-      lampInventory[power] = Math.max(0, lampInventory[power] - 1);
-      updateLampInventoryDisplay();
-    }
-  }
-
-  window.addEventListener("DOMContentLoaded", updateLampInventoryDisplay);
-</script>
-
-
-<script>
-  const defaultInventory = {
-    29: 40,
-    46: 167,
-    25: 161,
-    36: 20,
-    38: 16,
-    40: 153,
-    54: 111,
-    30: 9,
-    50: 4
-  };
-
-  let lampInventory = JSON.parse(localStorage.getItem("lamp_inventory")) || { ...defaultInventory };
-
-  function updateLampInventoryDisplay() {
-    let html = "<h3>Pozostałe lampy do montażu:</h3><table style='border-collapse: collapse; width:100%; max-width:400px;'>";
-    html += "<thead><tr><th style='border:1px solid #333; padding:5px;'>Moc (W)</th><th style='border:1px solid #333; padding:5px;'>Pozostało</th></tr></thead><tbody>";
-    const keys = Object.keys(lampInventory).sort((a,b) => a-b);
-    for (let moc of keys) {
-      html += `<tr><td style='border:1px solid #333; padding:5px;'>${moc}</td><td style='border:1px solid #333; padding:5px;'>${lampInventory[moc]}</td></tr>`;
-    }
-    html += "</tbody></table>";
-    document.getElementById("lampInventory").innerHTML = html;
-  }
-
-  function decrementLampInventory(power) {
-    if (lampInventory.hasOwnProperty(power)) {
-      lampInventory[power] = Math.max(0, lampInventory[power] - 1);
-      localStorage.setItem("lamp_inventory", JSON.stringify(lampInventory));
-      updateLampInventoryDisplay();
-    }
-  }
-
-  function resetLampInventory() {
-    if (confirm("Przywrócić domyślny stan lamp?")) {
-      lampInventory = { ...defaultInventory };
-      localStorage.setItem("lamp_inventory", JSON.stringify(lampInventory));
-      updateLampInventoryDisplay();
-    }
-  }
-
-  window.addEventListener("DOMContentLoaded", updateLampInventoryDisplay);
-</script>
-
-<script>
-  function toggleLampInventory() {
-    const section = document.getElementById("lampInventory");
-    section.style.display = section.style.display === "none" ? "block" : "none";
-  }
-</script>
-
-
-<script>
-  function showLampReport() {
-    const reportDiv = document.getElementById("lampReport");
-    const inventory = JSON.parse(localStorage.getItem("lamp_inventory")) || {};
-    const initialInventory = {
+    // Funkcje zarządzania inwentarzem lamp
+    const defaultInventory = {
       29: 40,
       46: 167,
       25: 161,
@@ -359,22 +311,102 @@ Moc (W),Pozostało
       50: 4
     };
 
-    let html = "<h3>Raport stanu lamp:</h3><table style='border-collapse: collapse; width:100%; max-width:400px;'>";
-    html += "<thead><tr><th style='border:1px solid #333; padding:5px;'>Moc (W)</th><th style='border:1px solid #333; padding:5px;'>Zamontowano</th><th style='border:1px solid #333; padding:5px;'>Pozostało</th></tr></thead><tbody>";
+    let lampInventory = JSON.parse(localStorage.getItem("lamp_inventory")) || { ...defaultInventory };
 
-    Object.keys(initialInventory).sort((a,b) => a-b).forEach(moc => {
-      const total = initialInventory[moc];
-      const left = inventory[moc] ?? total;
-      const used = total - left;
-      html += `<tr><td style='border:1px solid #333; padding:5px;'>${moc}</td><td style='border:1px solid #333; padding:5px;'>${used}</td><td style='border:1px solid #333; padding:5px;'>${left}</td></tr>`;
+    function updateLampInventoryDisplay() {
+      let html = "<h3>Pozostałe lampy do montażu:</h3><table style='border-collapse: collapse; width:100%; max-width:400px;'>";
+      html += "<thead><tr><th style='border:1px solid #333; padding:5px;'>Moc (W)</th><th style='border:1px solid #333; padding:5px;'>Pozostało</th></tr></thead><tbody>";
+      const keys = Object.keys(lampInventory).sort((a,b) => a-b);
+      for (let moc of keys) {
+        html += `<tr><td style='border:1px solid #333; padding:5px;'>${moc}</td><td style='border:1px solid #333; padding:5px;'>${lampInventory[moc]}</td></tr>`;
+      }
+      html += "</tbody></table>";
+      document.getElementById("lampInventory").innerHTML = html;
+    }
+
+    function decrementLampInventory(power) {
+      if (lampInventory.hasOwnProperty(power)) {
+        lampInventory[power] = Math.max(0, lampInventory[power] - 1);
+        localStorage.setItem("lamp_inventory", JSON.stringify(lampInventory));
+        updateLampInventoryDisplay();
+      }
+    }
+
+    function resetLampInventory() {
+      if (confirm("Przywrócić domyślny stan lamp?")) {
+        lampInventory = { ...defaultInventory };
+        localStorage.setItem("lamp_inventory", JSON.stringify(lampInventory));
+        updateLampInventoryDisplay();
+      }
+    }
+
+    function toggleLampInventory() {
+      const section = document.getElementById("lampInventory");
+      section.style.display = section.style.display === "none" ? "block" : "none";
+    }
+
+    function showLampReport() {
+      const reportDiv = document.getElementById("lampReport");
+      const initialInventory = defaultInventory;
+
+      let html = "<h3>Raport stanu lamp:</h3><table style='border-collapse: collapse; width:100%; max-width:400px;'>";
+      html += "<thead><tr><th style='border:1px solid #333; padding:5px;'>Moc (W)</th><th style='border:1px solid #333; padding:5px;'>Zamontowano</th><th style='border:1px solid #333; padding:5px;'>Pozostało</th></tr></thead><tbody>";
+
+      Object.keys(initialInventory).sort((a,b) => a-b).forEach(moc => {
+        const total = initialInventory[moc];
+        const left = lampInventory[moc] ?? total;
+        const used = total - left;
+        html += `<tr><td style='border:1px solid #333; padding:5px;'>${moc}</td><td style='border:1px solid #333; padding:5px;'>${used}</td><td style='border:1px solid #333; padding:5px;'>${left}</td></tr>`;
+      });
+
+      html += "</tbody></table>";
+      reportDiv.innerHTML = html;
+      reportDiv.style.display = "block";
+    }
+
+    function toggleLampSummary() {
+      const section = document.getElementById("lampSummary");
+      if (section.style.display === "none") {
+        section.style.display = "block";
+      } else {
+        section.style.display = "none";
+      }
+    }
+
+    // Inicjalizacja po załadowaniu strony
+    window.addEventListener("DOMContentLoaded", function() {
+      updateLampInventoryDisplay();
+      
+      // Dodaj przycisk skanera w bardziej widocznym miejscu
+      const scanButton = document.createElement("button");
+      scanButton.textContent = "Skanuj kod QR";
+      scanButton.onclick = startScanner;
+      scanButton.style.backgroundColor = "#4CAF50";
+      scanButton.style.color = "white";
+      scanButton.style.padding = "10px 20px";
+      scanButton.style.fontSize = "16px";
+      scanButton.style.margin = "10px 0";
+      document.body.insertBefore(scanButton, document.getElementById("qrResult"));
     });
+  </script>
 
-    html += "</tbody></table>";
-    reportDiv.innerHTML = html;
-    reportDiv.style.display = "block";
-  }
-</script>
+  <div id="lampSummary" style="margin-top:3rem; text-align:left; display:none;">
+    <h3>Planowane lampy do montażu:</h3>
+    <table style="border-collapse: collapse; width: 100%; max-width: 400px;">
+      <thead><tr><th style='border:1px solid #333; padding:5px;'>Model</th><th style='border:1px solid #333; padding:5px;'>Moc (W)</th><th style='border:1px solid #333; padding:5px;'>Ilość</th></tr></thead>
+      <tbody>
+        <tr><td style='border:1px solid #333; padding:5px;'>SAWA</td><td style='border:1px solid #333; padding:5px;'>29</td><td style='border:1px solid #333; padding:5px;'>40</td></tr>
+        <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>46</td><td style='border:1px solid #333; padding:5px;'>167</td></tr>
+        <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>25</td><td style='border:1px solid #333; padding:5px;'>161</td></tr>
+        <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>36</td><td style='border:1px solid #333; padding:5px;'>20</td></tr>
+        <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>38</td><td style='border:1px solid #333; padding:5px;'>16</td></tr>
+        <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>40</td><td style='border:1px solid #333; padding:5px;'>153</td></tr>
+        <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>54</td><td style='border:1px solid #333; padding:5px;'>111</td></tr>
+        <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>30</td><td style='border:1px solid #333; padding:5px;'>9</td></tr>
+        <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>50</td><td style='border:1px solid #333; padding:5px;'>4</td></tr>
+      </tbody>
+    </table>
+  </div>
 
 </body>
-
 </html>
