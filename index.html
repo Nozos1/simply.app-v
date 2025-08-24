@@ -36,17 +36,13 @@
   </table>
 
   <div id="dayList" style="margin-top: 2rem; text-align: left;"></div>
-  
-  <button onclick="resetLampInventory()" style="margin-top:1rem;">🔄 Resetuj stan lamp</button>
-
-  <div id="lampInventory" style="margin-top:2rem; text-align:left; display:none;"></div>
-  <button onclick="toggleLampInventory()" style="margin-top:1rem;">📉 Stan lamp</button>
+  <div id="totalSum" style="margin-top: 1rem; font-weight: bold;"></div>
 
   <div id="lampReport" style="margin-top:2rem; text-align:left; display:none;"></div>
   <button onclick="showLampReport()" style="margin-top:1rem;">📊 Raport montażu</button>
-  <div id="totalSum" style="margin-top: 1rem; font-weight: bold;"></div>
-  <button onclick="clearArchive()" style="margin-top:2rem;">🗑️ Usuń wszystkie dni</button>
   <button onclick="toggleLampSummary()" style="margin-top:1rem;">💡 Lampy</button>
+
+  <button onclick="clearArchive()" style="margin-top:2rem;">🗑️ Usuń wszystkie dni</button>
 
   <!-- Użyj dokładnie tej samej wersji biblioteki -->
   <script src="https://unpkg.com/html5-qrcode"></script>
@@ -63,7 +59,6 @@
       });
       updateSummary();
       renderDayList();
-      updateLampInventoryDisplay();
     });
 
     // DZIAŁAJĄCY SKANER ZE STARSZEJ WERSJI
@@ -114,7 +109,6 @@
         tr.innerHTML = rowHTML(row, data.length - 1);
         document.querySelector("#dataTable tbody").appendChild(tr);
         updateSummary();
-        decrementLampInventory(power);
       }, err => alert("Nie udało się pobrać lokalizacji: " + err.message), { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
     }
 
@@ -144,12 +138,6 @@
       let csv = "Kod QR,ID,Ilość,Moc (W),GPS,Czas\n";
       data.forEach(row => {
         csv += `${row.qr},${row.id},${row.qty},${row.power ?? ""},${row.gps},${row.time}\n`;
-      });
-
-      let inventory = JSON.parse(localStorage.getItem("lamp_inventory")) || {};
-      csv += "\nPozostały stan lamp:\nMoc (W),Pozostało\n";
-      Object.keys(inventory).sort((a, b) => a - b).forEach(key => {
-        csv += `${key},${inventory[key]}\n`;
       });
       
       const blob = new Blob([csv], { type: "text/csv" });
@@ -243,66 +231,64 @@
       }
     }
 
-    // Funkcje zarządzania inwentarzem lamp
-    const defaultInventory = {
-      29: 40,
-      46: 167,
-      25: 161,
-      36: 20,
-      38: 16,
-      40: 153,
-      54: 111,
-      30: 9,
-      50: 4
-    };
-
-    let lampInventory = JSON.parse(localStorage.getItem("lamp_inventory")) || { ...defaultInventory };
-
-    function updateLampInventoryDisplay() {
-      let html = "<h3>Pozostałe lampy do montażu:</h3><table style='border-collapse: collapse; width:100%; max-width:400px;'>";
-      html += "<thead><tr><th style='border:1px solid #333; padding:5px;'>Moc (W)</th><th style='border:1px solid #333; padding:5px;'>Pozostało</th></tr></thead><tbody>";
-      const keys = Object.keys(lampInventory).sort((a,b) => a-b);
-      for (let moc of keys) {
-        html += `<tr><td style='border:1px solid #333; padding:5px;'>${moc}</td><td style='border:1px solid #333; padding:5px;'>${lampInventory[moc]}</td></tr>`;
-      }
-      html += "</tbody></table>";
-      document.getElementById("lampInventory").innerHTML = html;
-    }
-
-    function decrementLampInventory(power) {
-      if (lampInventory.hasOwnProperty(power)) {
-        lampInventory[power] = Math.max(0, lampInventory[power] - 1);
-        localStorage.setItem("lamp_inventory", JSON.stringify(lampInventory));
-        updateLampInventoryDisplay();
-      }
-    }
-
-    function resetLampInventory() {
-      if (confirm("Przywrócić domyślny stan lamp?")) {
-        lampInventory = { ...defaultInventory };
-        localStorage.setItem("lamp_inventory", JSON.stringify(lampInventory));
-        updateLampInventoryDisplay();
-      }
-    }
-
-    function toggleLampInventory() {
-      const section = document.getElementById("lampInventory");
-      section.style.display = section.style.display === "none" ? "block" : "none";
-    }
-
     function showLampReport() {
       const reportDiv = document.getElementById("lampReport");
-      const initialInventory = defaultInventory;
+      const initialInventory = {
+        29: 40,
+        46: 167,
+        25: 161,
+        36: 20,
+        38: 16,
+        40: 153,
+        54: 111,
+        30: 9,
+        50: 4
+      };
 
-      let html = "<h3>Raport stanu lamp:</h3><table style='border-collapse: collapse; width:100%; max-width:400px;'>";
-      html += "<thead><tr><th style='border:1px solid #333; padding:5px;'>Moc (W)</th><th style='border:1px solid #333; padding:5px;'>Zamontowano</th><th style='border:1px solid #333; padding:5px;'>Pozostało</th></tr></thead><tbody>";
+      // Oblicz zamontowane lampy na podstawie danych
+      const mountedLamps = {};
+      data.forEach(row => {
+        if (row.power) {
+          mountedLamps[row.power] = (mountedLamps[row.power] || 0) + row.qty;
+        }
+      });
+
+      // Dodaj dane z archiwum
+      const archive = JSON.parse(localStorage.getItem("simply_archive")) || {};
+      for (let date in archive) {
+        archive[date].forEach(row => {
+          if (row.power) {
+            mountedLamps[row.power] = (mountedLamps[row.power] || 0) + row.qty;
+          }
+        });
+      }
+
+      let html = "<h3>Raport montażu lamp:</h3><table style='border-collapse: collapse; width:100%; max-width:500px; margin: 0 auto;'>";
+      html += "<thead><tr><th style='border:1px solid #333; padding:5px;'>Moc (W)</th><th style='border:1px solid #333; padding:5px;'>Planowano</th><th style='border:1px solid #333; padding:5px;'>Zamontowano</th><th style='border:1px solid #333; padding:5px;'>Pozostało</th></tr></thead><tbody>";
 
       Object.keys(initialInventory).sort((a,b) => a-b).forEach(moc => {
         const total = initialInventory[moc];
-        const left = lampInventory[moc] ?? total;
-        const used = total - left;
-        html += `<tr><td style='border:1px solid #333; padding:5px;'>${moc}</td><td style='border:1px solid #333; padding:5px;'>${used}</td><td style='border:1px solid #333; padding:5px;'>${left}</td></tr>`;
+        const mounted = mountedLamps[moc] || 0;
+        const left = Math.max(0, total - mounted);
+        html += `<tr>
+          <td style='border:1px solid #333; padding:5px;'>${moc}</td>
+          <td style='border:1px solid #333; padding:5px;'>${total}</td>
+          <td style='border:1px solid #333; padding:5px;'>${mounted}</td>
+          <td style='border:1px solid #333; padding:5px;'>${left}</td>
+        </tr>`;
       });
+
+      // Oblicz sumy
+      const totalPlanned = Object.values(initialInventory).reduce((a, b) => a + b, 0);
+      const totalMounted = Object.values(mountedLamps).reduce((a, b) => a + b, 0);
+      const totalLeft = totalPlanned - totalMounted;
+
+      html += `<tr style='font-weight: bold;'>
+        <td style='border:1px solid #333; padding:5px;'>SUMA</td>
+        <td style='border:1px solid #333; padding:5px;'>${totalPlanned}</td>
+        <td style='border:1px solid #333; padding:5px;'>${totalMounted}</td>
+        <td style='border:1px solid #333; padding:5px;'>${totalLeft}</td>
+      </tr>`;
 
       html += "</tbody></table>";
       reportDiv.innerHTML = html;
@@ -321,7 +307,7 @@
 
   <div id="lampSummary" style="margin-top:3rem; text-align:left; display:none;">
     <h3>Planowane lampy do montażu:</h3>
-    <table style="border-collapse: collapse; width: 100%; max-width: 400px;">
+    <table style="border-collapse: collapse; width: 100%; max-width: 400px; margin: 0 auto;">
       <thead><tr><th style='border:1px solid #333; padding:5px;'>Model</th><th style='border:1px solid #333; padding:5px;'>Moc (W)</th><th style='border:1px solid #333; padding:5px;'>Ilość</th></tr></thead>
       <tbody>
         <tr><td style='border:1px solid #333; padding:5px;'>SAWA</td><td style='border:1px solid #333; padding:5px;'>29</td><td style='border:1px solid #333; padding:5px;'>40</td></tr>
