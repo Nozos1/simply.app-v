@@ -67,17 +67,23 @@
     
     function startScanner() {
       const scanner = new Html5Qrcode("preview");
-      const config = { fps: 10, qrbox: 250, facingMode: "environment" };
+      const config = {
+        fps: 10,
+        qrbox: 250,
+        facingMode: "environment"
+      };
+
       scanner.start({ facingMode: "environment" }, config, qrCodeMessage => {
         document.getElementById("qrResult").value = qrCodeMessage;
         scanner.stop().then(() => {
           document.getElementById("preview").innerHTML = "";
         });
-      }).catch(err => alert("Błąd uruchamiania kamery: " + err));
+      }).catch(err => {
+        alert("Błąd uruchamiania kamery: " + err);
+      });
     }
 
-
-function saveEntry() {
+    function saveEntry() {
       const qr = document.getElementById("qrResult").value;
       const id = document.getElementById("idInput").value;
       const qty = parseInt(document.getElementById("qtyInput").value) || 0;
