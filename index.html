@@ -18,12 +18,14 @@
     #qr-scanner video { width: 100%; border: 2px solid #4CAF50; border-radius: 8px; }
     #close-scanner { margin-top: 10px; padding: 8px 16px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; }
     .scan-button { background: #4CAF50; color: white; padding: 10px 20px; font-size: 16px; margin: 10px 0; border: none; border-radius: 4px; cursor: pointer; }
+    .loading { color: #4CAF50; margin: 10px 0; }
   </style>
 </head>
 <body>
   <h1>Simply App</h1>
   
   <button class="scan-button" onclick="startScanner()">Skanuj kod QR</button>
+  <div id="scanner-status" class="loading"></div>
   <br>
   
   <div id="qr-scanner">
@@ -78,16 +80,32 @@
     </table>
   </div>
 
-  <!-- Użyj najnowszej wersji biblioteki -->
-  <script src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js"></script>
+  <!-- Alternatywny CDN dla biblioteki -->
+  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"></script>
   
   <script>
     let data = JSON.parse(localStorage.getItem("simply_data")) || [];
     let html5QrCode = null;
     let isScanning = false;
+    let scannerLoaded = false;
+
+    // Sprawdź czy biblioteka jest załadowana
+    function checkScannerLibrary() {
+      if (typeof Html5Qrcode !== 'undefined') {
+        scannerLoaded = true;
+        document.getElementById('scanner-status').textContent = 'Skaner gotowy do użycia';
+        console.log('Biblioteka skanera załadowana pomyślnie');
+      } else {
+        document.getElementById('scanner-status').textContent = 'Błąd ładowania biblioteki skanera';
+        console.error('Biblioteka Html5Qrcode nie jest dostępna');
+      }
+    }
 
     // Inicjalizacja po załadowaniu strony
     window.addEventListener("DOMContentLoaded", function() {
+      // Sprawdź czy biblioteka jest załadowana
+      setTimeout(checkScannerLibrary, 1000);
+      
       // Załaduj dane
       const table = document.querySelector("#dataTable tbody");
       data.forEach((row, i) => {
@@ -101,18 +119,13 @@
       
       // Obsługa przycisku zamykania skanera
       document.getElementById("close-scanner").addEventListener("click", stopScanner);
-      
-      console.log("Aplikacja załadowana. Html5Qrcode dostępny:", typeof Html5Qrcode !== 'undefined');
     });
 
     // Poprawiona funkcja startScanner
     function startScanner() {
-      console.log("Rozpoczynanie skanowania...");
-      
-      // Sprawdź czy biblioteka jest dostępna
-      if (typeof Html5Qrcode === 'undefined') {
-        alert("Błąd: Biblioteka skanera nie została załadowana. Odśwież stronę.");
-        console.error("Html5Qrcode is not defined");
+      if (!scannerLoaded) {
+        alert("Biblioteka skanera nie została jeszcze załadowana. Poczekaj chwilę i spróbuj ponownie.");
+        checkScannerLibrary();
         return;
       }
       
@@ -126,7 +139,9 @@
       
       Html5Qrcode.getCameras().then(devices => {
         if (devices && devices.length) {
-          const cameraId = devices[0].id;
+          // Preferuj tylną kamerę (środowisko)
+          const rearCamera = devices.find(device => device.label.toLowerCase().includes('back') || device.label.toLowerCase().includes('rear'));
+          const cameraId = rearCamera ? rearCamera.id : devices[0].id;
           
           // Utwórz nową instancję skanera
           html5QrCode = new Html5Qrcode("reader");
@@ -156,10 +171,13 @@
             alert("Nie można uruchomić kamery: " + err);
             scannerDiv.style.display = "none";
           });
+        } else {
+          alert("Nie znaleziono żadnej kamery.");
+          scannerDiv.style.display = "none";
         }
       }).catch(err => {
         console.error("Błąd pobierania listy kamer:", err);
-        alert("Nie można uzyskać dostępu do kamery: " + err);
+        alert("Nie można uzyskać dostępu do kamery. Sprawdź uprawnienia: " + err);
         scannerDiv.style.display = "none";
       });
     }
@@ -184,13 +202,18 @@
       }
     }
 
+    // Alternatywna funkcja skanera jeśli główna biblioteka nie działa
+    function startSimpleScanner() {
+      alert("Zaawansowany skaner nie jest dostępny. Możesz ręcznie wpisać kod QR w polu powyżej.");
+    }
+
     function saveEntry() {
       const qr = document.getElementById("qrResult").value;
       const id = document.getElementById("idInput").value;
       const qty = parseInt(document.getElementById("qtyInput").value) || 0;
       const power = parseInt(document.getElementById("powerInput").value) || 0;
       
-      if (!qr) return alert("Najpierw zeskanuj kod QR.");
+      if (!qr) return alert("Najpierw zeskanuj kod QR lub wpisz go ręcznie.");
       if (!navigator.geolocation) return alert("Twoja przeglądarka nie obsługuje geolokalizacji.");
 
       navigator.geolocation.getCurrentPosition(pos => {
@@ -424,6 +447,18 @@
       } else {
         section.style.display = "none";
       }
+    }
+
+    // Jeśli biblioteka nie działa, zmień przycisk na prostszą wersję
+    if (typeof Html5Qrcode === 'undefined') {
+      document.addEventListener('DOMContentLoaded', function() {
+        const scanButton = document.querySelector('.scan-button');
+        if (scanButton) {
+          scanButton.onclick = startSimpleScanner;
+          scanButton.style.backgroundColor = '#ff9800';
+          document.getElementById('scanner-status').textContent = 'Użyj trybu ręcznego - wpisz kod QR';
+        }
+      });
     }
   </script>
 </body>
