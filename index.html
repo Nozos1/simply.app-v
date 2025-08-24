@@ -68,28 +68,28 @@
     
 let scanner;
 
-    function startScanner() {
-      if (!scanner) {
-        scanner = new Html5Qrcode("preview");
-      } else {
-        scanner.clear().catch(() => {});
-      }
+function startScanner() {
+  if (!scanner) {
+    scanner = new Html5Qrcode("preview");
+  } else {
+    scanner.clear().catch(() => {});
+  }
 
-      const config = {
-        fps: 10,
-        qrbox: 250,
-        facingMode: { exact: "environment" }
-      };
+  const config = {
+    fps: 10,
+    qrbox: 250,
+    facingMode: { exact: "environment" }
+  };
 
-      scanner.start({ facingMode: "environment" }, config, qrCodeMessage => {
-        document.getElementById("qrResult").value = qrCodeMessage;
-        scanner.stop().then(() => {
-          document.getElementById("preview").innerHTML = "";
-        });
-      }).catch(err => {
-        alert("Błąd uruchamiania kamery: " + err);
-      });
-    }
+  scanner.start({ facingMode: "environment" }, config, qrCodeMessage => {
+    document.getElementById("qrResult").value = qrCodeMessage;
+    scanner.stop().then(() => {
+      document.getElementById("preview").innerHTML = "";
+    });
+  }).catch(err => {
+    alert("Błąd uruchamiania kamery: " + err);
+  });
+}
 
 ;
 
