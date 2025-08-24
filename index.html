@@ -24,7 +24,6 @@
   <input type="text" id="idInput" placeholder="Wpisz ID"><br>
   <input type="number" id="qtyInput" placeholder="Ilość"><br>
   <input type="number" id="powerInput" placeholder="Moc (W)"><br>
-
   <button onclick="saveEntry()">Zapisz</button>
   <button onclick="exportCSV()">Eksportuj CSV</button>
   <button onclick="clearData()">Wyczyść dane</button>
@@ -38,6 +37,7 @@
 
   <div id="dayList" style="margin-top: 2rem; text-align: left;"></div>
   <div id="totalSum" style="margin-top: 1rem; font-weight: bold;"></div>
+  <button onclick="clearArchive()" style="margin-top:2rem;">🗑️ Usuń wszystkie dni</button>
 
   <script src="https://unpkg.com/html5-qrcode"></script>
   <script>
@@ -69,13 +69,13 @@
       const qr = document.getElementById("qrResult").value;
       const id = document.getElementById("idInput").value;
       const qty = parseInt(document.getElementById("qtyInput").value) || 0;
+      const power = parseInt(document.getElementById("powerInput").value) || 0;
       if (!qr) return alert("Najpierw zeskanuj kod QR.");
       if (!navigator.geolocation) return alert("Twoja przeglądarka nie obsługuje geolokalizacji.");
 
       navigator.geolocation.getCurrentPosition(pos => {
         const gps = `${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`;
         const time = new Date().toLocaleString();
-        const power = parseInt(document.getElementById("powerInput").value) || 0;
         const row = { qr, id, qty, power, gps, time };
         data.push(row);
         localStorage.setItem("simply_data", JSON.stringify(data));
@@ -91,7 +91,6 @@
         <td>${row.qr}</td>
         <td contenteditable="true" onblur="updateID(${index}, this.textContent)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">${row.id}</td>
         <td>${row.qty}</td>
-        <td>${row.power ?? ""}</td>
         <td>${row.power ?? ""}</td>
         <td>${row.gps}</td>
         <td>${row.time}</td>
@@ -177,9 +176,7 @@
       if (!rows) return;
       let tableHTML = `<h3>Dane z dnia ${date}</h3><table style="width:100%; border-collapse: collapse;"><thead><tr><th>Kod QR</th><th>ID</th><th>Ilość</th><th>Moc (W)</th><th>GPS</th><th>Czas</th><th>Usuń</th></tr></thead><tbody>`;
       rows.forEach((row, i) => {
-        tableHTML += `<tr><td>${row.qr}</td><td>${row.id}</td><td>${row.qty}</td>
-        <td>${row.power ?? ""}</td><td>${row.power ?? ""}</td>
-        <td>${row.gps}</td><td>${row.time}</td><td><button onclick="deleteFromDay('${date}', ${i})">🗑️</button></td></tr>`;
+        tableHTML += `<tr><td>${row.qr}</td><td>${row.id}</td><td>${row.qty}</td><td>${row.power ?? ""}</td><td>${row.gps}</td><td>${row.time}</td><td><button onclick="deleteFromDay('${date}', ${i})">🗑️</button></td></tr>`;
       });
       tableHTML += "</tbody></table>";
       document.getElementById("dayList").innerHTML = tableHTML + '<button onclick="renderDayList()">⬅️ Wróć do listy dni</button>';
@@ -196,6 +193,15 @@
         showDay(date);
       }
       localStorage.setItem("simply_archive", JSON.stringify(archive));
+    }
+
+    function clearArchive() {
+      if (confirm("Czy na pewno chcesz usunąć wszystkie zapisane dni?")) {
+        localStorage.removeItem("simply_archive");
+        renderDayList();
+        document.getElementById("dayList").innerHTML = "<h3>Zapisane dni:</h3><p>Brak zapisanych dni.</p>";
+        document.getElementById("totalSum").textContent = "";
+      }
     }
   </script>
 </body>
