@@ -14,18 +14,20 @@
     #dayList ul { list-style: none; padding-left: 0; }
     #dayList li { padding: 0.3rem; border-bottom: 1px solid #333; cursor: pointer; }
     #dayList li:hover { background: #222; }
-    #qr-scanner { position: relative; width: 100%; max-width: 400px; margin: 0 auto; }
+    #qr-scanner { position: relative; width: 100%; max-width: 400px; margin: 0 auto; display: none; }
     #qr-scanner video { width: 100%; border: 2px solid #4CAF50; border-radius: 8px; }
-    #qr-scanner .scan-region { border: 2px solid #4CAF50 !important; }
-    #qr-scanner .scan-line { background: #4CAF50 !important; }
     #close-scanner { margin-top: 10px; padding: 8px 16px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    .scan-button { background: #4CAF50; color: white; padding: 10px 20px; font-size: 16px; margin: 10px 0; border: none; border-radius: 4px; cursor: pointer; }
   </style>
 </head>
 <body>
   <h1>Simply App</h1>
   
-  <div id="qr-scanner" style="display: none;">
-    <div id="preview"></div>
+  <button class="scan-button" onclick="startScanner()">Skanuj kod QR</button>
+  <br>
+  
+  <div id="qr-scanner">
+    <div id="reader"></div>
     <button id="close-scanner">Zamknij skaner</button>
   </div>
   
@@ -58,14 +60,35 @@
   <button onclick="clearArchive()" style="margin-top:2rem;">🗑️ Usuń wszystkie dni</button>
   <button onclick="toggleLampSummary()" style="margin-top:1rem;">💡 Lampy</button>
 
+  <div id="lampSummary" style="margin-top:3rem; text-align:left; display:none;">
+    <h3>Planowane lampy do montażu:</h3>
+    <table style="border-collapse: collapse; width: 100%; max-width: 400px;">
+      <thead><tr><th style='border:1px solid #333; padding:5px;'>Model</th><th style='border:1px solid #333; padding:5px;'>Moc (W)</th><th style='border:1px solid #333; padding:5px;'>Ilość</th></tr></thead>
+      <tbody>
+        <tr><td style='border:1px solid #333; padding:5px;'>SAWA</td><td style='border:1px solid #333; padding:5px;'>29</td><td style='border:1px solid #333; padding:5px;'>40</td></tr>
+        <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>46</td><td style='border:1px solid #333; padding:5px;'>167</td></tr>
+        <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>25</td><td style='border:1px solid #333; padding:5px;'>161</td></tr>
+        <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>36</td><td style='border:1px solid #333; padding:5px;'>20</td></tr>
+        <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>38</td><td style='border:1px solid #333; padding:5px;'>16</td></tr>
+        <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>40</td><td style='border:1px solid #333; padding:5px;'>153</td></tr>
+        <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>54</td><td style='border:1px solid #333; padding:5px;'>111</td></tr>
+        <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>30</td><td style='border:1px solid #333; padding:5px;'>9</td></tr>
+        <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>50</td><td style='border:1px solid #333; padding:5px;'>4</td></tr>
+      </tbody>
+    </table>
+  </div>
+
   <!-- Użyj najnowszej wersji biblioteki -->
   <script src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js"></script>
   
   <script>
     let data = JSON.parse(localStorage.getItem("simply_data")) || [];
     let html5QrCode = null;
+    let isScanning = false;
 
-    window.addEventListener("DOMContentLoaded", () => {
+    // Inicjalizacja po załadowaniu strony
+    window.addEventListener("DOMContentLoaded", function() {
+      // Załaduj dane
       const table = document.querySelector("#dataTable tbody");
       data.forEach((row, i) => {
         const tr = document.createElement("tr");
@@ -74,24 +97,39 @@
       });
       updateSummary();
       renderDayList();
-      
-      // Inicjalizacja skanera (ale nie uruchamiaj go od razu)
-      html5QrCode = new Html5Qrcode("preview");
+      updateLampInventoryDisplay();
       
       // Obsługa przycisku zamykania skanera
-      document.getElementById("close-scanner").addEventListener("click", () => {
-        stopScanner();
-      });
+      document.getElementById("close-scanner").addEventListener("click", stopScanner);
+      
+      console.log("Aplikacja załadowana. Html5Qrcode dostępny:", typeof Html5Qrcode !== 'undefined');
     });
 
     // Poprawiona funkcja startScanner
     function startScanner() {
+      console.log("Rozpoczynanie skanowania...");
+      
+      // Sprawdź czy biblioteka jest dostępna
+      if (typeof Html5Qrcode === 'undefined') {
+        alert("Błąd: Biblioteka skanera nie została załadowana. Odśwież stronę.");
+        console.error("Html5Qrcode is not defined");
+        return;
+      }
+      
       const scannerDiv = document.getElementById("qr-scanner");
       scannerDiv.style.display = "block";
       
+      if (isScanning) {
+        console.log("Skaner już działa");
+        return;
+      }
+      
       Html5Qrcode.getCameras().then(devices => {
         if (devices && devices.length) {
-          const cameraId = devices[0].id; // Użyj pierwszej dostępnej kamery
+          const cameraId = devices[0].id;
+          
+          // Utwórz nową instancję skanera
+          html5QrCode = new Html5Qrcode("reader");
           
           html5QrCode.start(
             cameraId,
@@ -100,34 +138,49 @@
               qrbox: { width: 250, height: 250 },
               facingMode: "environment"
             },
-            qrCodeMessage => {
+            (qrCodeMessage) => {
               // Kod QR zeskanowany pomyślnie
+              console.log("Zeskanowano kod:", qrCodeMessage);
               document.getElementById("qrResult").value = qrCodeMessage;
               stopScanner();
             },
-            errorMessage => {
+            (errorMessage) => {
               // Pomijamy komunikaty o błędach, chyba że jest to krytyczny błąd
+              console.log("Skanowanie:", errorMessage);
             }
-          ).catch(err => {
+          ).then(() => {
+            isScanning = true;
+            console.log("Skaner uruchomiony pomyślnie");
+          }).catch(err => {
             console.error("Błąd uruchamiania skanera:", err);
             alert("Nie można uruchomić kamery: " + err);
+            scannerDiv.style.display = "none";
           });
         }
       }).catch(err => {
         console.error("Błąd pobierania listy kamer:", err);
         alert("Nie można uzyskać dostępu do kamery: " + err);
+        scannerDiv.style.display = "none";
       });
     }
 
     // Funkcja do zatrzymywania skanera
     function stopScanner() {
-      if (html5QrCode && html5QrCode.isScanning) {
+      const scannerDiv = document.getElementById("qr-scanner");
+      
+      if (html5QrCode && isScanning) {
         html5QrCode.stop().then(() => {
           console.log("Skaner QR zatrzymany");
-          document.getElementById("qr-scanner").style.display = "none";
+          isScanning = false;
+          scannerDiv.style.display = "none";
         }).catch(err => {
           console.error("Błąd zatrzymywania skanera:", err);
+          isScanning = false;
+          scannerDiv.style.display = "none";
         });
+      } else {
+        scannerDiv.style.display = "none";
+        isScanning = false;
       }
     }
 
@@ -372,41 +425,6 @@
         section.style.display = "none";
       }
     }
-
-    // Inicjalizacja po załadowaniu strony
-    window.addEventListener("DOMContentLoaded", function() {
-      updateLampInventoryDisplay();
-      
-      // Dodaj przycisk skanera w bardziej widocznym miejscu
-      const scanButton = document.createElement("button");
-      scanButton.textContent = "Skanuj kod QR";
-      scanButton.onclick = startScanner;
-      scanButton.style.backgroundColor = "#4CAF50";
-      scanButton.style.color = "white";
-      scanButton.style.padding = "10px 20px";
-      scanButton.style.fontSize = "16px";
-      scanButton.style.margin = "10px 0";
-      document.body.insertBefore(scanButton, document.getElementById("qrResult"));
-    });
   </script>
-
-  <div id="lampSummary" style="margin-top:3rem; text-align:left; display:none;">
-    <h3>Planowane lampy do montażu:</h3>
-    <table style="border-collapse: collapse; width: 100%; max-width: 400px;">
-      <thead><tr><th style='border:1px solid #333; padding:5px;'>Model</th><th style='border:1px solid #333; padding:5px;'>Moc (W)</th><th style='border:1px solid #333; padding:5px;'>Ilość</th></tr></thead>
-      <tbody>
-        <tr><td style='border:1px solid #333; padding:5px;'>SAWA</td><td style='border:1px solid #333; padding:5px;'>29</td><td style='border:1px solid #333; padding:5px;'>40</td></tr>
-        <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>46</td><td style='border:1px solid #333; padding:5px;'>167</td></tr>
-        <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>25</td><td style='border:1px solid #333; padding:5px;'>161</td></tr>
-        <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>36</td><td style='border:1px solid #333; padding:5px;'>20</td></tr>
-        <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>38</td><td style='border:1px solid #333; padding:5px;'>16</td></tr>
-        <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>40</td><td style='border:1px solid #333; padding:5px;'>153</td></tr>
-        <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>54</td><td style='border:1px solid #333; padding:5px;'>111</td></tr>
-        <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>30</td><td style='border:1px solid #333; padding:5px;'>9</td></tr>
-        <tr><td style='border:1px solid #333; padding:5px;'>Urbino</td><td style='border:1px solid #333; padding:5px;'>50</td><td style='border:1px solid #333; padding:5px;'>4</td></tr>
-      </tbody>
-    </table>
-  </div>
-
 </body>
 </html>
