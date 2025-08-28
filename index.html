@@ -117,7 +117,7 @@
         <td>${row.qr}</td>
         <td contenteditable="true" onblur="updateID(${index}, this.textContent)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">${row.id}</td>
         <td>${row.qty}</td>
-        <td>${row.power ?? ""}</td>
+        <td contenteditable="true" onblur="updatePower(${index}, this.textContent)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">${row.power ?? ""}</td>
         <td>${row.gps}</td>
         <td>${row.time}</td>
         <td><button onclick="deleteEntry(${index})">🗑️</button></td>
@@ -128,6 +128,13 @@
       data[index].id = newID.trim();
       localStorage.setItem("simply_data", JSON.stringify(data));
     }
+
+    function updatePower(index, newPower) {
+  const parsed = parseInt(newPower.trim());
+  data[index].power = isNaN(parsed) ? 0 : parsed;
+  localStorage.setItem("simply_data", JSON.stringify(data));
+}
+
 
     function updateSummary() {
       const sum = data.reduce((total, row) => total + row.qty, 0);
