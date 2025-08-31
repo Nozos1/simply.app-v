@@ -238,6 +238,19 @@
       }
     }
 
+    function updateArchivedPower(date, index, newPower) {
+  const parsed = parseInt(newPower.trim());
+  let archive = JSON.parse(localStorage.getItem("simply_archive")) || {};
+  if (!archive[date]) return;
+
+  archive[date][index].power = isNaN(parsed) ? 0 : parsed;
+  localStorage.setItem("simply_archive", JSON.stringify(archive));
+
+  // Odśwież widok dnia po zmianie
+  showDay(date);
+}
+
+    
     function showLampReport() {
       const reportDiv = document.getElementById("lampReport");
       const initialInventory = {
