@@ -210,7 +210,8 @@
       if (!rows) return;
       let tableHTML = `<h3>Dane z dnia ${date}</h3><table style="width:100%; border-collapse: collapse;"><thead><tr><th>Kod QR</th><th>ID</th><th>Ilość</th><th>Moc (W)</th><th>GPS</th><th>Czas</th><th>Usuń</th></tr></thead><tbody>`;
       rows.forEach((row, i) => {
-        tableHTML += `<tr><td>${row.qr}</td><td>${row.id}</td><td>${row.qty}</td><td>${row.power ?? ""}</td><td>${row.gps}</td><td>${row.time}</td><td><button onclick="deleteFromDay('${date}', ${i})">🗑️</button></td></tr>`;
+        tableHTML += `<tr><td>${row.qr}</td><td>${row.id}</td><td>${row.qty}</td><td contenteditable="true" onblur="updateArchivedPower('${date}', ${i}, this.textContent)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">${row.power ?? ""}</td>
+<td>${row.gps}</td><td>${row.time}</td><td><button onclick="deleteFromDay('${date}', ${i})">🗑️</button></td></tr>`;
       });
       tableHTML += "</tbody></table>";
       document.getElementById("dayList").innerHTML = tableHTML + '<button onclick="renderDayList()">⬅️ Wróć do listy dni</button>';
